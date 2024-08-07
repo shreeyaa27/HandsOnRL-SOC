@@ -5,34 +5,36 @@ import pandas as pd
 from scipy.optimize import curve_fit
 
 def func(t, v, k):
-    """ computes the function S(t) with constants v and k """
-    
-    # TODO: return the given function S(t)
-    pass
-
-    # END TODO
-
+    """ Computes the function S(t) with constants v and k """
+    return v * np.exp(-k * t)
 
 def find_constants(df: pd.DataFrame, func: Callable):
-    """ returns the constants v and k """
+    """ Returns the constants v and k """
+    t = df['t'].values
+    S = df['S'].values
 
-    v = 0
-    k = 0
-
-    # TODO: fit a curve using SciPy to estimate v and k
-
-    # END TODO
+    # Fit the curve using SciPy to estimate v and k
+    popt, _ = curve_fit(func, t, S)
+    v, k = popt
 
     return v, k
-
 
 if __name__ == "__main__":
     df = pd.read_csv("data.csv")
     v, k = find_constants(df, func)
-    v = v.round(4)
-    k = k.round(4)
+    v = round(v, 4)
+    k = round(k, 4)
     print(v, k)
 
-    # TODO: plot a histogram and save to fit_curve.png
+    # Generate predicted values using the estimated constants
+    t = df['t'].values
+    S_pred = func(t, v, k)
 
-    # END TODO
+    # Plot a histogram of the residuals
+    residuals = df['S'].values - S_pred
+    plt.hist(residuals, bins=30, edgecolor='black')
+    plt.title("Histogram of Residuals")
+    plt.xlabel("Residual")
+    plt.ylabel("Frequency")
+    plt.savefig("fit_curve.png")
+    plt.show()
