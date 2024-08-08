@@ -25,7 +25,7 @@ movement_direction = 'R'
 next_direction = movement_direction
 
 fruit_spawned = True
-fruit_image = pygame.image.load('red.png')
+fruit_image = pygame.image.load('magenta.png')
 fruit_image = pygame.transform.scale(fruit_image, (20, 20))
 fruit_position = [random.randrange(15, (screen_width // 10)) * 10 - 21, random.randrange(15, (screen_height // 10)) * 10 - 21]
 

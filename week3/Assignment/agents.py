@@ -1,181 +1,116 @@
 from bandits import Bandit
-# Import libraries if you need them
+import random
+import math
+import numpy as np
 
 class Agent:
     def __init__(self, bandit: Bandit) -> None:
         self.bandit = bandit
-        self.banditN = bandit.getN()
+        self.num_actions = bandit.getN()
 
-        self.rewards = 0
-        self.numiters = 0
+        self.total_reward = 0
+        self.iterations = 0
     
-
-    def action(self) -> int:
-        '''This function returns which action is to be taken. It must be implemented in the subclasses.'''
+    def choose_action(self) -> int:
+        '''This method should be overridden to define the action selection strategy.'''
         raise NotImplementedError()
 
-    def update(self, choice : int, reward : int) -> None:
-        '''This function updates all member variables you may require. It must be implemented in the subclasses.'''
+    def update_policy(self, action: int, reward: int) -> None:
+        '''This method should be overridden to define the policy update after receiving a reward.'''
         raise NotImplementedError()
 
-    # dont edit this function
     def act(self) -> int:
-        choice = self.action()
-        reward = self.bandit.choose(choice)
+        action = self.choose_action()
+        reward = self.bandit.choose(action)
 
-        self.rewards += reward
-        self.numiters += 1
+        self.total_reward += reward
+        self.iterations += 1
 
-        self.update(choice,reward)
+        self.update_policy(action, reward)
         return reward
+
 class GreedyAgent(Agent):
-    def __init__(self, bandits: Bandit, initialQ: float) -> None:
-        super().__init__(bandits)
-        self.q_values = np.full(self.banditN, initialQ)  # Initialize Q values
-        self.action_counts = np.zeros(self.banditN)  # Track counts of each action
+    def __init__(self, bandit: Bandit, initial_value: float) -> None:
+        super().__init__(bandit)
+        self.q_estimates = [initial_value] * self.num_actions
+        self.action_count = [0] * self.num_actions
 
-    def action(self) -> int:
-        return np.argmax(self.q_values)
+    def choose_action(self) -> int:
+        return np.argmax(self.q_estimates)
 
-    def update(self, choice: int, reward: int) -> None:
-        self.action_counts[choice] += 1
-        alpha = 1.0 / self.action_counts[choice]
-        self.q_values[choice] += alpha * (reward - self.q_values[choice])
+    def update_policy(self, action: int, reward: int) -> None:
+        self.action_count[action] += 1
+        self.q_estimates[action] += (reward - self.q_estimates[action]) / self.action_count[action]
 
-# class GreedyAgent(Agent):
-#     def __init__(self, bandits: Bandit, initialQ : float) -> None:
-#         super().__init__(bandits)
-#         # add any member variables you may require
-        
-#     # implement
-#     def action(self) -> int:
-#         pass
-
-#     # implement
-#     def update(self, choice: int, reward: int) -> None:
-#         pass
-class epsGreedyAgent(Agent):
-    def __init__(self, bandits: Bandit, epsilon: float) -> None:
-        super().__init__(bandits)
+class EpsilonGreedyAgent(Agent):
+    def __init__(self, bandit: Bandit, epsilon: float) -> None:
+        super().__init__(bandit)
         self.epsilon = epsilon
-        self.q_values = np.zeros(self.banditN)
-        self.action_counts = np.zeros(self.banditN)
-
-    def action(self) -> int:
-        if np.random.rand() < self.epsilon:
-            return np.random.randint(self.banditN)
-        else:
-            return np.argmax(self.q_values)
-
-    def update(self, choice: int, reward: int) -> None:
-        self.action_counts[choice] += 1
-        alpha = 1.0 / self.action_counts[choice]
-        self.q_values[choice] += alpha * (reward - self.q_values[choice])
-
-# class epsGreedyAgent(Agent):
-#     def __init__(self, bandits: Bandit, epsilon : float) -> None:
-#         super().__init__(bandits)
-#         self.epsilon = epsilon
-#         # add any member variables you may require
+        self.q_estimates = [0.0] * self.num_actions
+        self.action_count = [0] * self.num_actions
     
-#     # implement
-#     def action(self) -> int:
-#         pass
+    def choose_action(self) -> int:
+        if random.random() < self.epsilon:
+            return random.randint(0, self.num_actions - 1)
+        else:
+            return np.argmax(self.q_estimates)
 
-#     # implement
-#     def update(self, choice: int, reward: int) -> None:
-#         pass
-class UCBAAgent(Agent):
-    def __init__(self, bandits: Bandit, c: float) -> None:
-        super().__init__(bandits)
-        self.c = c
-        self.q_values = np.zeros(self.banditN)
-        self.action_counts = np.zeros(self.banditN)
+    def update_policy(self, action: int, reward: int) -> None:
+        self.action_count[action] += 1
+        self.q_estimates[action] += (reward - self.q_estimates[action]) / self.action_count[action]
 
-    def action(self) -> int:
-        total_counts = np.sum(self.action_counts)
-        if total_counts < self.banditN:
-            return np.argmin(self.action_counts)
-        ucb_values = self.q_values + self.c * np.sqrt(np.log(total_counts) / (self.action_counts + 1))
+class UCBAgent(Agent):
+    def __init__(self, bandit: Bandit, exploration_param: float) -> None:
+        super().__init__(bandit)
+        self.c = exploration_param
+        self.q_estimates = [0.0] * self.num_actions
+        self.action_count = [0] * self.num_actions
+
+    def choose_action(self) -> int:
+        for i in range(self.num_actions):
+            if self.action_count[i] == 0:
+                return i
+        ucb_values = [self.q_estimates[i] + self.c * math.sqrt(math.log(self.iterations + 1) / self.action_count[i]) for i in range(self.num_actions)]
         return np.argmax(ucb_values)
 
-    def update(self, choice: int, reward: int) -> None:
-        self.action_counts[choice] += 1
-        alpha = 1.0 / self.action_counts[choice]
-        self.q_values[choice] += alpha * (reward - self.q_values[choice])
+    def update_policy(self, action: int, reward: int) -> None:
+        self.action_count[action] += 1
+        self.q_estimates[action] += (reward - self.q_estimates[action]) / self.action_count[action]
 
-# class UCBAAgent(Agent):
-#     def __init__(self, bandits: Bandit, c: float) -> None:
-#         super().__init__(bandits)
-#         self.c = c
-#         # add any member variables you may require
-
-#     # implement
-#     def action(self) -> int:
-#         pass
-
-#     # implement
-#     def update(self, choice: int, reward: int) -> None:
-#         pass
 class GradientBanditAgent(Agent):
-    def __init__(self, bandits: Bandit, alpha: float) -> None:
-        super().__init__(bandits)
-        self.alpha = alpha
-        self.preferences = np.zeros(self.banditN)
-        self.avg_reward = 0
+    def __init__(self, bandit: Bandit, learning_rate: float) -> None:
+        super().__init__(bandit)
+        self.alpha = learning_rate
+        self.preferences = [0.0] * self.num_actions
+        self.avg_reward = 0.0
 
-    def action(self) -> int:
-        exp_preferences = np.exp(self.preferences - np.max(self.preferences))
-        self.action_probabilities = exp_preferences / np.sum(exp_preferences)
-        return np.random.choice(self.banditN, p=self.action_probabilities)
+    def choose_action(self) -> int:
+        exp_preferences = np.exp(self.preferences)
+        action_probabilities = exp_preferences / np.sum(exp_preferences)
+        return np.random.choice(range(self.num_actions), p=action_probabilities)
 
-    def update(self, choice: int, reward: int) -> None:
-        self.avg_reward += (reward - self.avg_reward) / self.numiters
-        self.preferences[choice] += self.alpha * (reward - self.avg_reward) * (1 - self.action_probabilities[choice])
-        for i in range(self.banditN):
-            if i != choice:
-                self.preferences[i] -= self.alpha * (reward - self.avg_reward) * self.action_probabilities[i]
+    def update_policy(self, action: int, reward: int) -> None:
+        self.avg_reward += (reward - self.avg_reward) / (self.iterations + 1)
+        exp_preferences = np.exp(self.preferences)
+        action_probabilities = exp_preferences / np.sum(exp_preferences)
+        for i in range(self.num_actions):
+            if i == action:
+                self.preferences[i] += self.alpha * (reward - self.avg_reward) * (1 - action_probabilities[i])
+            else:
+                self.preferences[i] -= self.alpha * (reward - self.avg_reward) * action_probabilities[i]
 
-# class GradientBanditAgent(Agent):
-#     def __init__(self, bandits: Bandit, alpha : float) -> None:
-#         super().__init__(bandits)
-#         self.alpha = alpha
-#         # add any member variables you may require
+class ThompsonSamplingAgent(Agent):
+    def __init__(self, bandit: Bandit) -> None:
+        super().__init__(bandit)
+        self.successes = [1] * self.num_actions
+        self.failures = [1] * self.num_actions
 
-#     # implement
-#     def action(self) -> int:
-#         pass
+    def choose_action(self) -> int:
+        sampled_theta = [np.random.beta(self.successes[i], self.failures[i]) for i in range(self.num_actions)]
+        return np.argmax(sampled_theta)
 
-#     # implement
-#     def update(self, choice: int, reward: int) -> None:
-#         pass
-class ThompsonSamplerAgent(Agent):
-    def __init__(self, bandits: Bandit) -> None:
-        super().__init__(bandits)
-        self.successes = np.zeros(self.banditN)
-        self.failures = np.zeros(self.banditN)
-
-    def action(self) -> int:
-        sampled_values = np.random.beta(1 + self.successes, 1 + self.failures)
-        return np.argmax(sampled_values)
-
-    def update(self, choice: int, reward: int) -> None:
-        if reward == 1:
-            self.successes[choice] += 1
+    def update_policy(self, action: int, reward: int) -> None:
+        if reward > 0:
+            self.successes[action] += 1
         else:
-            self.failures[choice] += 1
-
-# class ThompsonSamplerAgent(Agent):
-#     def __init__(self, bandits: Bandit) -> None:
-#         super().__init__(bandits)
-#         # add any member variables you may require
-
-#     # implement
-#     def action(self) -> int:
-#         pass
-
-#     # implement
-#     def update(self, choice: int, reward: int) -> None:
-#         pass
-
-# Implement other subclasses if you want to try other strategies
+            self.failures[action] += 1
